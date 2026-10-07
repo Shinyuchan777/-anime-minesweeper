@@ -51,60 +51,199 @@ button.secondary{background:#e9e9ed;color:#171717}.result{text-align:center;min-
 
 <script>
 const TOPICS = ["老師","醫生","軍人","魔法師","單手劍士","雙手劍士","刺客","勇者","死靈術師","海賊","忍者","死神","轉生者","穿越者","最終Boss","大型機器人駕駛員","皇帝（國王）","主唱","吉他手","鼓手","DJ","廚師","鍊金術師","上班族","人魚","妖精","惡魔","殭屍","吸血鬼","機器人","巨人","外星人","天使","哥布林（巨魔）","鬼","幽靈","骷髏","精靈","籃球","排球","足球","網球","游泳","棒球","各種顏色的頭髮","眼鏡","笨蛋","天才","獨眼","可愛生物","異色瞳","獸耳","翅膀","眼罩","面具","雙馬尾","傲嬌","腹黑","中二","無口","超能力","變身","狗","貓","馬","龍","狼","宇航員（太空人）","手槍","牛仔","埃及","義大利","偶像","科學家","替身使者","決鬥者","魔法少女","子安武人","武士","火","水","雷","蛇","弓箭手","騎士","巫女","偵探","反派","王子","怪獸"];
-let DB=[],game=[],idx=0,safe=0,mine=0,fail=0,timer=30,tick=null,locked=false;
+
+const REMOTE_URL="https://raw.githubusercontent.com/arda-/anime-character-offline-database/prod/latest/characters.min.json";
+let DB=[],REMOTE=[],game=[],idx=0,safe=0,mine=0,fail=0,timer=30,tick=null,locked=false;
+
+const $=id=>document.getElementById(id);
+function norm(s){return String(s||"").trim().toLowerCase().replace(/\s+/g,"")}
+function uniqBy(a,key){const m=new Map();for(const x of a)m.set(key(x),x);return [...m.values()]}
 
 async function loadDB(){
-  const r=await fetch("anime-minesweeper-characters.json");
-  DB=(await r.json()).characters||[];
+  const local=await fetch("anime-minesweeper-characters.json",{cache:"no-store"}).then(r=>r.json());
+  DB=local.characters||[];
+
+  // 大型公開角色索引：只在需要時下載一次，之後快取 7 天。
+  try{
+    const cache=JSON.parse(localStorage.getItem("animeMinesRemote")||"null");
+    if(cache && cache.saved && Date.now()-cache.saved<7*86400000 && Array.isArray(cache.data)){
+      REMOTE=cache.data;
+    }else{
+      const r=await fetch(REMOTE_URL);
+      if(!r.ok) throw new Error("remote db "+r.status);
+      const raw=await r.json();
+      REMOTE=normalizeRemote(raw);
+      localStorage.setItem("animeMinesRemote",JSON.stringify({saved:Date.now(),data:REMOTE}));
+    }
+  }catch(e){
+    console.warn("大型角色庫載入失敗，使用本地角色庫：",e);
+    REMOTE=[];
+  }
+  $("dbStatus").textContent=`角色庫：本地 ${DB.length} 筆${REMOTE.length?`＋公開角色索引 ${REMOTE.length} 筆`:""}`;
 }
-function sample(a,n){let x=[...a],o=[];while(x.length&&o.length<n)o.push(x.splice(Math.floor(Math.random()*x.length),1)[0]);return o}
+
+function normalizeRemote(raw){
+  const out=[];
+  for(const c of (raw.data||[])){
+    const appearances=c.animeAppearances||[];
+    const voices=(c.voiceActorsByLanguage?.Japanese||[]).map(v=>v.name).filter(Boolean);
+    const aliases=[...(c.nicknames||[])].filter(Boolean);
+    if(!appearances.length){
+      out.push({name:c.name,work:"",aliases,voice_actor:voices.join("、"),about:c.about||"",topics:[],source:"remote"});
+      continue;
+    }
+    for(const a of appearances){
+      out.push({
+        name:c.name,
+        work:a.anime?.title||"",
+        aliases,
+        voice_actor:voices.join("、"),
+        about:c.about||"",
+        topics:inferTopics(c,a),
+        source:"remote"
+      });
+    }
+  }
+  return uniqBy(out,c=>`${norm(c.name)}|${norm(c.work)}`);
+}
+
+function inferTopics(c,a){
+  const t=[];
+  const s=`${c.about||""} ${a.role||""} ${a.anime?.title||""}`.toLowerCase();
+  const has=(...xs)=>xs.some(x=>s.includes(x));
+  if(has("teacher","professor","instructor","教師","老師"))t.push("老師");
+  if(has("doctor","physician","surgeon","medic","醫師","醫生"))t.push("醫生");
+  if(has("soldier","military","army","navy","officer","軍人","軍隊"))t.push("軍人");
+  if(has("mage","wizard","magician","sorcerer","魔法師"))t.push("魔法師");
+  if(has("assassin","刺客"))t.push("刺客");
+  if(has("pirate","海賊"))t.push("海賊");
+  if(has("ninja","shinobi","忍者"))t.push("忍者");
+  if(has("shinigami","soul reaper","死神"))t.push("死神");
+  if(has("vampire","吸血鬼"))t.push("吸血鬼");
+  if(has("robot","android","cyborg","機器人"))t.push("機器人");
+  if(has("giant","titan","巨人"))t.push("巨人");
+  if(has("alien","extraterrestrial","外星人"))t.push("外星人");
+  if(has("angel","天使"))t.push("天使");
+  if(has("elf","精靈"))t.push("精靈");
+  if(has("mermaid","人魚"))t.push("人魚");
+  if(has("skeleton","骷髏"))t.push("骷髏");
+  if(has("ghost","幽靈"))t.push("幽靈");
+  if(has("demon","devil","惡魔"))t.push("惡魔");
+  if(has("detective","偵探"))t.push("偵探");
+  if(has("knight","騎士"))t.push("騎士");
+  if(has("archer","弓箭手"))t.push("弓箭手");
+  if(has("samurai","武士"))t.push("武士");
+  if(has("prince","王子"))t.push("王子");
+  if(has("idol","偶像"))t.push("偶像");
+  if(has("scientist","scientist","科學家"))t.push("科學家");
+  if(has("astronaut","space","宇航員","太空人"))t.push("宇航員（太空人）");
+  if(has("cowboy","牛仔"))t.push("牛仔");
+  if(has("detective","探偵"))t.push("偵探");
+  return [...new Set(t)];
+}
+
+function mergeCandidate(c){
+  const exact=DB.filter(x=>norm(x.name)===norm(c.name)&&(!c.work||norm(x.work)===norm(c.work)));
+  if(exact.length)return exact[0];
+  const localSame=DB.filter(x=>norm(x.name)===norm(c.name));
+  if(localSame.length){
+    const l=localSame.find(x=>norm(x.work)===norm(c.work));
+    if(l)return l;
+  }
+  return c;
+}
+
+function sample(a,n){
+  let x=[...a],o=[];
+  while(x.length&&o.length<n)o.push(x.splice(Math.floor(Math.random()*x.length),1)[0]);
+  return o;
+}
+
+function minePool(topic){
+  return DB.filter(c=>{
+    if(topic==="子安武人") return (c.voice_actor||"").includes("子安武人");
+    if(topic==="各種顏色的頭髮") return c.hair_color && !["黑色","黑"].includes(c.hair_color);
+    return (c.topics||[]).includes(topic);
+  });
+}
+
 function startGame(){
   clearInterval(tick);idx=0;safe=0;mine=0;fail=0;
-  game=sample(TOPICS,10).map(topic=>{
-    const pool=DB.filter(c=>c.topics.includes(topic));
-    const m=pool.length?pool[Math.floor(Math.random()*pool.length)]:null;
-    return {topic,mine:m};
+  const usable=TOPICS.filter(t=>minePool(t).length);
+  game=sample(usable,Math.min(10,usable.length)).map(topic=>{
+    const pool=minePool(topic);
+    return {topic,mine:pool[Math.floor(Math.random()*pool.length)]};
   });
-  document.getElementById("start").classList.add("hidden");
-  document.getElementById("end").classList.add("hidden");
-  document.getElementById("game").classList.remove("hidden");render();
+  $("start").classList.add("hidden");$("end").classList.add("hidden");$("game").classList.remove("hidden");render();
 }
+
 function render(){
   clearInterval(tick);locked=false;timer=30;
-  const q=game[idx];document.getElementById("qnum").textContent=`第 ${idx+1} 題 / 10`;
-  document.getElementById("timer").textContent=timer;document.getElementById("topic").textContent=q.topic;
-  document.getElementById("answer").value="";document.getElementById("result").textContent="";
-  document.getElementById("workBox").classList.add("hidden");
-  document.getElementById("progress").innerHTML=game.map((_,i)=>`<span class="dot ${i<idx?"done":""}"></span>`).join("");
-  document.getElementById("answer").focus();
-  tick=setInterval(()=>{timer--;document.getElementById("timer").textContent=timer;if(timer<=0){clearInterval(tick);failQ("⏰ 時間到！")}},1000);
+  const q=game[idx];
+  $("qnum").textContent=`第 ${idx+1} 題 / ${game.length}`;
+  $("timer").textContent=timer;$("topic").textContent=q.topic;
+  $("answer").value="";$("result").textContent="";$("workBox").classList.add("hidden");
+  $("progress").innerHTML=game.map((_,i)=>`<span class="dot ${i<idx?"done":""}"></span>`).join("");
+  $("answer").focus();
+  tick=setInterval(()=>{timer--; $("timer").textContent=timer;if(timer<=0){clearInterval(tick);failQ("⏰ 時間到！")}},1000);
 }
-function norm(s){return s.trim().toLowerCase().replace(/\s+/g,"")}
+
 function candidates(ans){
   const a=norm(ans);
-  return DB.filter(c=>norm(c.name)===a || c.aliases.some(x=>norm(x)===a));
+  const local=DB.filter(c=>norm(c.name)===a || (c.aliases||[]).some(x=>norm(x)===a));
+  const remote=REMOTE.filter(c=>norm(c.name)===a || (c.aliases||[]).some(x=>norm(x)===a));
+  return uniqBy([...local,...remote].map(mergeCandidate),c=>`${norm(c.name)}|${norm(c.work)}`);
 }
-function failQ(msg){if(locked)return;locked=true;fail++;clearInterval(tick);document.getElementById("result").textContent=msg;setTimeout(next,700)}
+
+function failQ(msg){
+  if(locked)return;
+  locked=true;fail++;clearInterval(tick);$("result").textContent=msg;setTimeout(next,900);
+}
+
 function submitAnswer(){
   if(locked)return;
-  const ans=document.getElementById("answer").value.trim();if(!ans){failQ("💥 放棄／未作答");return}
+  const ans=$("answer").value.trim();
+  if(!ans){failQ("💥 放棄／未作答");return}
+
   const cs=candidates(ans);
-  if(!cs.length){failQ("❓ 資料庫找不到這名角色");return}
-  if(cs.length>1 && document.getElementById("workBox").classList.contains("hidden")){
-    const sel=document.getElementById("workSelect");sel.innerHTML=cs.map((c,i)=>`<option value="${i}">${c.work}｜${c.name}</option>`).join("");
-    document.getElementById("workBox").classList.remove("hidden");window._candidates=cs;return;
+  if(!cs.length){failQ("❓ 大型角色庫也找不到這名角色");return}
+
+  if(cs.length>1 && $("workBox").classList.contains("hidden")){
+    $("workSelect").innerHTML=cs.map((c,i)=>`<option value="${i}">${c.work||"作品資料未標示"}｜${c.name}</option>`).join("");
+    $("workBox").classList.remove("hidden");window._candidates=cs;return;
   }
-  const c=cs.length>1?window._candidates[+document.getElementById("workSelect").value]:cs[0];
+
+  const c=cs.length>1?window._candidates[+$("workSelect").value]:cs[0];
   const q=game[idx];
-  if(q.mine && c.name===q.mine.name && c.work===q.mine.work){locked=true;mine++;clearInterval(tick);document.getElementById("result").textContent="💥 踩雷！";setTimeout(next,700);return}
-  let ok=false;
-  if(q.topic==="子安武人") ok=c.voice_actor.includes("子安武人");
-  else if(q.topic==="各種顏色的頭髮") ok=!!c.hair_color && !["黑色","黑"].includes(c.hair_color);
-  else ok=c.topics.includes(q.topic);
-  if(!ok){failQ("💥 題目不符！");return}
-  locked=true;safe++;clearInterval(tick);document.getElementById("result").textContent="✅ 安全！";setTimeout(next,700);
+
+  if(q.mine && c.name===q.mine.name && c.work===q.mine.work){
+    locked=true;mine++;clearInterval(tick);$("result").textContent="💥 踩雷！";setTimeout(next,900);return;
+  }
+
+  const topics=[...(c.topics||[])];
+  if(q.topic==="子安武人"){
+    if((c.voice_actor||"").includes("子安武人")) topics.push(q.topic);
+  }else if(q.topic==="各種顏色的頭髮"){
+    if(c.hair_color && !["黑色","黑"].includes(c.hair_color)) topics.push(q.topic);
+  }
+
+  if(!topics.includes(q.topic)){
+    if(c.source==="remote" && !(c.topics||[]).length){
+      failQ("⚠️ 找到這名角色，但這題的分類資料尚未建立");
+    }else{
+      failQ("💥 題目不符！");
+    }
+    return;
+  }
+
+  locked=true;safe++;clearInterval(tick);$("result").textContent="✅ 安全！";setTimeout(next,900);
 }
-function next(){if(idx<9){idx++;render()}else finish()}
-function finish(){document.getElementById("game").classList.add("hidden");document.getElementById("end").classList.remove("hidden");document.getElementById("score").textContent=`本場：安全 ${safe} 題・踩雷 ${mine} 題・題目不符／未作答 ${fail} 題`}
+
+function next(){if(idx<game.length-1){idx++;render()}else finish()}
+function finish(){
+  $("game").classList.add("hidden");$("end").classList.remove("hidden");
+  $("score").textContent=`本場：安全 ${safe} 題・踩雷 ${mine} 題・題目不符／未作答 ${fail} 題`;
+}
 </script>
+<script>loadDB().catch(e=>{console.error(e);$("dbStatus").textContent="❌ 角色資料庫載入失敗";});</script>
 </body></html>
