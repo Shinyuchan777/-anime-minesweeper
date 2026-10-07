@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>動漫人物・踩地雷</title>
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--text:#111827;--muted:#6b7280;--accent:#6366f1;--ok:#16a34a;--danger:#dc2626;--line:#e5e7eb}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC",sans-serif;background:linear-gradient(160deg,#eef2ff,#f8fafc 45%,#fef2f2);color:var(--text)}
+main{width:min(680px,100%);margin:auto;padding:18px 14px 32px}
+.card{background:rgba(255,255,255,.94);border:1px solid rgba(255,255,255,.8);border-radius:24px;padding:24px;box-shadow:0 12px 40px rgba(15,23,42,.10)}
+h1{font-size:clamp(28px,7vw,42px);margin:4px 0 8px}
+h2{font-size:clamp(24px,6vw,34px);margin:12px 0}
+p{line-height:1.65}
+.muted{color:var(--muted)}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.badge{background:#eef2ff;color:#3730a3;padding:7px 10px;border-radius:999px;font-size:14px}
+button{width:100%;border:0;border-radius:14px;padding:14px 18px;font-size:17px;font-weight:700;background:var(--accent);color:#fff;cursor:pointer;touch-action:manipulation}
+button:active{transform:scale(.99)}
+input{width:100%;border:2px solid var(--line);border-radius:14px;padding:14px;font-size:18px;outline:none}
+input:focus{border-color:var(--accent)}
+.top{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.timer{font-size:24px;font-weight:800}
+.timer.danger{color:var(--danger)}
+.progress{height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden;margin:14px 0 22px}
+.progress>div{height:100%;background:var(--accent);transition:width .25s}
+.question{text-align:center;padding:18px 0}
+.type{font-weight:800;color:#4f46e5;font-size:15px}
+.topic{font-size:clamp(34px,10vw,56px);font-weight:900;margin:12px 0 18px}
+.result{text-align:center;border-radius:16px;padding:16px;margin-top:16px;font-size:19px;font-weight:800}
+.result.ok{background:#ecfdf5;color:#166534}.result.mine,.result.bad{background:#fef2f2;color:#991b1b}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}
+.stat{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center}.stat b{display:block;font-size:25px;margin-top:4px}
+.hidden{display:none!important}
+footer{text-align:center;color:var(--muted);font-size:12px;margin-top:14px}
+@media(min-width:700px){main{padding-top:42px}.card{padding:34px}}
+</style>
+</head>
+<body>
+<main>
+<section class="card" id="home">
+<h1>🎌 動漫人物・踩地雷</h1>
+<p class="muted">10 題動漫角色挑戰。每題都有自己的隱藏地雷，猜中了就 💥！</p>
+<div class="badges"><span class="badge">10 題</span><span class="badge">每題 10 秒</span><span class="badge">踩雷不中斷</span><span class="badge">手機・平板・電腦</span></div>
+<button id="start">開始遊戲</button>
+</section>
+
+<section class="card hidden" id="game">
+<div class="top"><span id="count" class="badge"></span><span class="timer">⏱️ <span id="time">10</span></span></div>
+<div class="progress"><div id="bar" style="width:10%"></div></div>
+<div class="question">
+<div id="type" class="type"></div>
+<div class="topic" id="topic"></div>
+<p class="muted">請回答符合題目的動漫角色。</p>
+</div>
+<input id="answer" inputmode="text" autocomplete="off" placeholder="輸入角色名稱">
+<div style="height:10px"></div>
+<button id="submit">送出答案</button>
+<div id="result" class="hidden"></div>
+</section>
+
+<section class="card hidden" id="end">
+<h1>🏁 遊戲結束</h1>
+<p id="summary"></p>
+<div class="stats">
+<div class="stat">安全<b id="safe">0</b></div>
+<div class="stat">踩雷<b id="mine">0</b></div>
+<div class="stat">不符／超時<b id="bad">0</b></div>
+</div>
+<button id="again">再玩一次</button>
+</section>
+<footer>動漫人物・踩地雷 · Responsive Web Edition</footer>
+</main>
+
+<script>
+/*
+正式公開版建議把題庫、角色別名與地雷判定移到伺服器。
+這個版本先提供跨裝置可玩的前端版本。
+*/
+const TOPICS = [
+"老師","醫生","軍人","魔法師","單手劍士","雙手劍士","刺客","勇者","死靈術師","海賊","忍者","死神","轉生者","穿越者","最終Boss","大型機器人駕駛員","皇帝（國王）","主唱","吉他手","鼓手","DJ","廚師","鍊金術師","上班族",
+"人魚","妖精","惡魔","殭屍","吸血鬼","機器人","巨人","外星人","天使","哥布林（巨魔）","鬼","幽靈","骷髏","精靈",
+"籃球","排球","足球","網球","游泳","棒球",
+"各種顏色的頭髮","眼鏡","笨蛋","天才","獨眼","可愛生物","異色瞳","獸耳","翅膀","眼罩","面具","雙馬尾","傲嬌","腹黑","中二","無口","超能力","變身",
+"狗","貓","馬","龍","狼","火","水","雷","蛇",
+"宇航員","手槍","牛仔","埃及","義大利","偶像","科學家","替身使者","決鬥者","魔法少女","子安武人","武士","弓箭手","騎士","巫女","偵探","反派","王子","怪獸"
+];
+
+const DEMO = [
+ {topic:"騎士",type:"人物",mine:"阿爾托莉雅",valid:["阿爾托莉雅","Saber","亞瑟王"]},
+ {topic:"異色瞳",type:"聲優",mine:"小鳥遊六花",valid:["小鳥遊六花"]},
+ {topic:"蛇",type:"人物",mine:"伊黑小芭內",valid:["伊黑小芭內","蛇柱"]},
+ {topic:"巫女",type:"人物",mine:"博麗靈夢",valid:["博麗靈夢","靈夢"]},
+ {topic:"王子",type:"聲優",mine:"魯路修",valid:["魯路修","魯路修·蘭佩路基"]},
+ {topic:"雙馬尾",type:"人物",mine:"逢坂大河",valid:["逢坂大河"]},
+ {topic:"怪獸",type:"聲優",mine:"怪獸9號",valid:["怪獸9號"]},
+ {topic:"武士",type:"人物",mine:"桂小太郎",valid:["桂小太郎"]},
+ {topic:"翅膀",type:"聲優",mine:"大天使米迦勒",valid:["大天使米迦勒","米迦勒"]},
+ {topic:"偵探",type:"人物",mine:"江戶川柯南",valid:["江戶川柯南","柯南"]}
+];
+
+let qs=[],i=0,t=10,timer=null,stats={safe:0,mine:0,bad:0};
+const $=id=>document.getElementById(id);
+function shuffle(a){return [...a].sort(()=>Math.random()-.5)}
+function start(){
+  qs=shuffle(DEMO); i=0; stats={safe:0,mine:0,bad:0};
+  $("home").classList.add("hidden"); $("end").classList.add("hidden"); $("game").classList.remove("hidden");
+  next();
+}
+function next(){
+  if(i>=qs.length){finish();return}
+  const q=qs[i];
+  $("count").textContent=`第 ${i+1} / ${qs.length} 題`;
+  $("bar").style.width=((i+1)/qs.length*100)+"%";
+  $("type").textContent=q.type==="聲優"?"🎙️ 聲優題型":"👤 人物題型";
+  $("topic").textContent=q.topic;
+  $("result").className="hidden"; $("result").textContent="";
+  $("answer").disabled=false; $("answer").value=""; $("answer").focus();
+  t=10; $("time").textContent=t; $("time").parentElement.classList.remove("danger");
+  clearInterval(timer);
+  timer=setInterval(()=>{t--; $("time").textContent=t; if(t<=3)$("time").parentElement.classList.add("danger"); if(t<=0){clearInterval(timer);judge("");}},1000);
+}
+function judge(raw){
+  clearInterval(timer); $("answer").disabled=true; $("submit").disabled=true;
+  const ans=raw.trim(), q=qs[i];
+  let cls,msg;
+  if(!ans){stats.bad++;cls="bad";msg="💥 超時／未作答";}
+  else if(ans===q.mine){stats.mine++;cls="mine";msg="💥 踩雷！";}
+  else {stats.safe++;cls="ok";msg="✅ 安全！";}
+  $("result").className="result "+cls; $("result").textContent=msg;
+  setTimeout(()=>{$("submit").disabled=false;i++;next()},900);
+}
+function finish(){
+  $("game").classList.add("hidden"); $("end").classList.remove("hidden");
+  $("safe").textContent=stats.safe; $("mine").textContent=stats.mine; $("bad").textContent=stats.bad;
+  $("summary").textContent=`本局共 10 題。${stats.safe>=7?"表現很不錯！":stats.safe>=4?"再接再厲！":"下一局一定能更好！"}`;
+}
+$("start").onclick=start; $("again").onclick=start; $("submit").onclick=()=>judge($("answer").value);
+$("answer").addEventListener("keydown",e=>{if(e.key==="Enter")judge($("answer").value)});
+</script>
+</body>
+</html>
